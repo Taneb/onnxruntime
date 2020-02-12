@@ -881,7 +881,7 @@ common::Status InferenceSession::Initialize() {
 #ifdef ONNXRUNTIME_ENABLE_INSTRUMENT
     std::map<std::string, size_t> node_name_to_index;
     bool AreNamesUnique = true;
-    for (auto& n : session_state_.GetGraphViewer()->Nodes()) {
+    for (auto& n : session_state_->GetGraphViewer()->Nodes()) {
       if (n.Name().empty() || node_name_to_index.find(n.Name()) != node_name_to_index.end()) {
         AreNamesUnique = false;
         break;

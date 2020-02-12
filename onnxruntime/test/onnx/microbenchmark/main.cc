@@ -13,10 +13,14 @@
 #include <core/framework/kernel_def_builder.h>
 #include <core/session/onnxruntime_c_api.h>
 #include <core/session/onnxruntime_cxx_api.h>
+#include <core/session/ort_env.h>
+
 #include <unordered_map>
 
 
-const OrtApi* Ort::g_api = OrtGetApi(ORT_API_VERSION);
+const OrtApi* g_ort = OrtGetApiBase()->GetApi(ORT_API_VERSION);
+OrtEnv* env = nullptr;
+
 using namespace onnxruntime;
 
 static void BM_CPUAllocator(benchmark::State& state) {
@@ -31,7 +35,8 @@ BENCHMARK(BM_CPUAllocator)->Arg(4)->Arg(sizeof(Tensor));
 
 static void BM_ResolveGraph(benchmark::State& state) {
   std::shared_ptr<onnxruntime::Model> model_copy;
-  auto st = onnxruntime::Model::Load(ORT_TSTR("../models/opset8/test_tiny_yolov2/model.onnx"), model_copy);
+  auto logger = env->GetLoggingManager()->CreateLogger("test");
+  auto st = onnxruntime::Model::Load(ORT_TSTR("../models/opset8/test_tiny_yolov2/model.onnx"), model_copy, nullptr, *logger);
   if (!st.IsOK()) {
     printf("Parse model failed: %s", st.ErrorMessage().c_str());
     abort();
@@ -40,7 +45,7 @@ static void BM_ResolveGraph(benchmark::State& state) {
   model_copy.reset();
   for (auto _ : state) {
     state.PauseTiming();
-    std::shared_ptr<onnxruntime::Model> model = std::make_shared<onnxruntime::Model>(proto);
+    std::shared_ptr<onnxruntime::Model> model = std::make_shared<onnxruntime::Model>(proto, nullptr, *logger);
     onnxruntime::Graph& graph = model->MainGraph();
     state.ResumeTiming();
     st = graph.Resolve();
@@ -56,20 +61,19 @@ BENCHMARK(BM_ResolveGraph);
   do {                                                   \
     OrtStatus* onnx_status = (expr);                     \
     if (onnx_status != NULL) {                           \
-      const char* msg = Ort::g_api->GetErrorMessage(onnx_status); \
+      const char* msg = g_ort->GetErrorMessage(onnx_status); \
       fprintf(stderr, "%s\n", msg);                      \
-      Ort::g_api->ReleaseStatus(onnx_status);                     \
+      g_ort->ReleaseStatus(onnx_status);                     \
       abort();                                           \
     }                                                    \
   } while (0);
 
-OrtEnv* env = nullptr;
 
 int main(int argc, char** argv) {
   ::benchmark::Initialize(&argc, argv);
   if (::benchmark::ReportUnrecognizedArguments(argc, argv)) return -1;
-  ORT_ABORT_ON_ERROR(Ort::g_api->CreateEnv(ORT_LOGGING_LEVEL_WARNING, "test", &env));
+  ORT_ABORT_ON_ERROR(g_ort->CreateEnv(ORT_LOGGING_LEVEL_ERROR, "test", &env));  
   ::benchmark::RunSpecifiedBenchmarks();
-  Ort::g_api->ReleaseEnv(env);
+  g_ort->ReleaseEnv(env);  
   return 0;
 }
