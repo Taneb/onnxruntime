@@ -13,7 +13,6 @@
 #pragma warning(push)
 #pragma warning(disable : 4267)
 #endif
-#include <unsupported/Eigen/CXX11/src/ThreadPool/Barrier.h>
 #if defined(__GNUC__)
 #pragma GCC diagnostic pop
 #else
