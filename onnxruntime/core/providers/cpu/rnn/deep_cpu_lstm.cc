@@ -9,7 +9,6 @@
 #pragma warning(disable : 4996)
 #endif
 
-#include "core/platform/threadpool.h"
 #include "core/framework/op_kernel_context_internal.h"
 
 #include "core/providers/cpu/rnn/deep_cpu_lstm.h"
@@ -17,6 +16,7 @@
 #include "core/common/common.h"
 #include "core/common/logging/logging.h"
 #include "core/framework/allocator.h"
+#include "core/platform/threadpool.h"
 
 #ifdef _MSC_VER
 #pragma warning(pop)

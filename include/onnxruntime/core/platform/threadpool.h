@@ -7,6 +7,8 @@
 #include <functional>
 #include <memory>
 
+#include "ort_mutex.h"
+
 #if defined(__GNUC__)
 #pragma GCC diagnostic push
 #if __GNUC__ >= 6
@@ -24,6 +26,8 @@
 #elif defined(_MSC_VER)
 #pragma warning(pop)
 #endif
+#include "core/platform/EigenNonBlockingThreadPool.h"
+
 
 namespace onnxruntime {
 
@@ -34,6 +38,8 @@ namespace concurrency {
  * Don't put any object of this type into a global variable in a Win32 DLL.
  */
 class ThreadPool {
+ private:
+   using Handle = onnxruntime::ThreadPoolTempl<Eigen::StlThreadEnvironment>;
  public:
   /*
   Initializes a thread pool given the current environment.
@@ -104,10 +110,10 @@ class ThreadPool {
 
   int CurrentThreadId() const;
 
-  Eigen::ThreadPool& GetHandler() { return impl_; }
+  Handle& GetHandler() { return impl_; }
 
  private:
-  Eigen::ThreadPool impl_;
+  Handle impl_;
 };
 
 }  // namespace concurrency

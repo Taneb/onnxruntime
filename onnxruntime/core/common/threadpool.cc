@@ -20,8 +20,6 @@
 #pragma warning(pop)
 #endif
 
-using Eigen::Barrier;
-
 namespace onnxruntime {
 
 namespace concurrency {
