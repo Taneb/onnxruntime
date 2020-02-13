@@ -5,6 +5,21 @@
 cmake_minimum_required(VERSION 3.5)
 # Project
 project(onnxruntime C CXX)
+
+option(onnxruntime_USE_CUDA "Build with CUDA support" OFF)
+option(onnxruntime_USE_OPENVINO "Build with OpenVINO support" OFF)
+option(onnxruntime_USE_EIGEN_FOR_BLAS "Use eign for blas" ON)
+option(onnxruntime_USE_NNAPI "Build with DNNLibrary for Android NNAPI support" OFF)
+option(onnxruntime_USE_DNNL "Build with DNNL support" OFF)
+option(onnxruntime_USE_MKLML "Build DNNL with MKL-ML binary dependency" OFF)
+option(onnxruntime_USE_GEMMLOWP "Build with gemmlowp for quantized gemm" OFF)
+option(onnxruntime_USE_FEATURIZERS "Build ML Featurizers support" OFF)
+option(onnxruntime_USE_NGRAPH "Build with nGraph support" OFF)
+
+if(onnxruntime_USE_OPENVINO)
+  add_definitions(-DUSE_OPENVINO=1)
+endif()
+
 set(CMAKE_CXX_STANDARD 14)
 
 find_package(Threads)

@@ -116,7 +116,7 @@ class OrtMutex {
   OrtMutex& operator=(const OrtMutex&) = delete;
 
   void lock() { nsync::nsync_mu_lock(&data_); }
-  bool try_lock() noexcept { nsync::nsync_mu_trylock(&data_) == 0; }
+  bool try_lock() noexcept { return nsync::nsync_mu_trylock(&data_) == 0; }
   void unlock() noexcept { nsync::nsync_mu_unlock(&data_); }
 
   using native_handle_type = nsync::nsync_mu*;
@@ -136,7 +136,7 @@ class OrtCondVar {
   }
   void notify_all() noexcept { nsync::nsync_cv_broadcast(&native_cv_object); }
 
-  void wait(std::unique_lock<OrtMutex>& __lk) {
+  void wait(std::unique_lock<OrtMutex>& lk) {
 #ifndef NDEBUG
     if (!lk.owns_lock())
       throw std::runtime_error("OrtCondVar wait failed: mutex not locked");
