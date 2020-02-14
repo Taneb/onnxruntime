@@ -1444,7 +1444,7 @@ common::Status InferenceSession::WaitForNotification(Notification* p_executor_do
   if (timeout_in_ms > 0) {
     ORT_NOT_IMPLEMENTED(__FUNCTION__, "timeout_in_ms >0 is not supported");  // TODO
   }
-  p_executor_done->WaitForNotification();
+  p_executor_done->Wait();
 
   return Status::OK();
 }
