@@ -9,14 +9,47 @@
 
 #pragma once
 
-#include "unsupported/Eigen/CXX11/src/Tensor/TensorMacros.h"
-#include "unsupported/Eigen/CXX11/src/Tensor/TensorMeta.h"
-#include "unsupported/Eigen/CXX11/src/Tensor/TensorCostModel.h"
+#pragma once
+#include "onnxruntime_config.h"
+// build/external/eigen/unsupported/Eigen/CXX11/src/Tensor/TensorEvaluator.h:162:71:
+// error: ignoring attributes on template argument "Eigen::PacketType<const float, Eigen::DefaultDevice>::type {aka
+// __vector(4) float}" [-Werror=ignored-attributes]
+#if defined(__GNUC__)
+#pragma GCC diagnostic push
+#if __GNUC__ >= 6
+#pragma GCC diagnostic ignored "-Wignored-attributes"
+#endif
+#pragma GCC diagnostic ignored "-Wunused-parameter"
+#ifdef HAS_DEPRECATED_COPY
+#pragma GCC diagnostic ignored "-Wdeprecated-copy"
+#endif
+#elif defined(_MSC_VER)
+// build\windows\debug\external\eigen3\unsupported\eigen\cxx11\src/Tensor/Tensor.h(76):
+// warning C4554: '&': check operator precedence for possible error; use parentheses to clarify precedence
+
+// unsupported\eigen\cxx11\src\Tensor\TensorUInt128.h(150,0): Warning C4245: 'initializing': conversion from '__int64'
+// to 'uint64_t', signed/unsigned mismatch
+#pragma warning(push)
+#pragma warning(disable : 4554)
+#pragma warning(disable : 4245)
+#pragma warning(disable : 4127)
+// The following warning can be fixed by updating eigen to the latest, however, the new code will trigger a MSVC bug
+// that will slow down the build time to 3-5 hours.
+#pragma warning(disable : 4723)
+#endif
+
+#include "unsupported/Eigen/CXX11/Tensor"
+
+#if defined(__GNUC__)
+#pragma GCC diagnostic pop
+#elif defined(_MSC_VER)
+#pragma warning(pop)
+#endif
 
 namespace onnxruntime {
 class Barrier {
  public:
-  Barrier(unsigned int count) : state_(count << 1), notified_(false) {
+  explicit Barrier(unsigned int count) : state_(count << 1), notified_(false) {
     eigen_plain_assert(((count << 1) >> 1) == count);
   }
 #ifdef NDEBUG
@@ -66,11 +99,23 @@ struct Notification : Barrier {
   Notification() : Barrier(1){};
 };
 
+// Runs an arbitrary function and then calls Notify() on the passed in
+// Notification.
+template <typename Function, typename... Args>
+struct FunctionWrapperWithNotification {
+  static void run(Notification* n, Function f, Args... args) {
+    f(args...);
+    if (n) {
+      n->Notify();
+    }
+  }
+};
+
 class EventCount {
  public:
   class Waiter;
 
-  EventCount(Eigen::MaxSizeVector<Waiter>& waiters) : state_(kStackMask), waiters_(waiters) {
+  explicit EventCount(Eigen::MaxSizeVector<Waiter>& waiters) : state_(kStackMask), waiters_(waiters) {
     eigen_plain_assert(waiters.size() < (1 << kWaiterBits) - 1);
   }
 
@@ -223,7 +268,7 @@ class EventCount {
   Eigen::MaxSizeVector<Waiter>& waiters_;
 
 #ifdef NDEBUG
-  static void CheckState(uint64_t , bool) {}
+  static void CheckState(uint64_t, bool) {}
   static void CheckState(uint64_t) {}
 #else
   static void CheckState(uint64_t state, bool waiter = false) {
@@ -237,7 +282,7 @@ class EventCount {
     (void)signals;
   }
 #endif
-  void Park(Waiter* w) {
+  static void Park(Waiter* w) {
     std::unique_lock<OrtMutex> lock(w->mu);
     while (w->state != Waiter::kSignaled) {
       w->state = Waiter::kWaiting;
@@ -261,6 +306,7 @@ class EventCount {
     }
   }
 
+ public:
   EventCount(const EventCount&) = delete;
   void operator=(const EventCount&) = delete;
 };
@@ -466,11 +512,10 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
   typedef typename Environment::Task Task;
   typedef RunQueue<Task, 1024> Queue;
 
-  ThreadPoolTempl(int num_threads, Environment env = Environment())
+  explicit ThreadPoolTempl(int num_threads, Environment env = Environment())
       : ThreadPoolTempl(num_threads, true, env) {}
 
-  ThreadPoolTempl(int num_threads, bool allow_spinning,
-                  Environment env = Environment())
+  ThreadPoolTempl(int num_threads, bool allow_spinning, Environment env = Environment())
       : env_(env),
         num_threads_(num_threads),
         allow_spinning_(allow_spinning),
@@ -500,8 +545,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     thread_data_.resize(num_threads_);
     for (int i = 0; i < num_threads_; i++) {
       SetStealPartition(i, EncodePartition(0, num_threads_));
-      thread_data_[i].thread.reset(
-          env_.CreateThread([this, i]() { WorkerLoop(i); }));
+      thread_data_[i].thread.reset(env_.CreateThread([this, i]() { WorkerLoop(i); }));
     }
   }
 
@@ -522,8 +566,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     }
     // Join threads explicitly (by destroying) to avoid destruction order within
     // this class.
-    for (size_t i = 0; i < thread_data_.size(); ++i)
-      thread_data_[i].thread.reset();
+    for (size_t i = 0; i < thread_data_.size(); ++i) thread_data_[i].thread.reset();
   }
 
   void SetStealPartitions(const std::vector<std::pair<unsigned, unsigned>>& partitions) {
@@ -539,12 +582,9 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     }
   }
 
-  void Schedule(std::function<void()> fn) override {
-    ScheduleWithHint(std::move(fn), 0, num_threads_);
-  }
+  void Schedule(std::function<void()> fn) override { ScheduleWithHint(std::move(fn), 0, num_threads_); }
 
-  void ScheduleWithHint(std::function<void()> fn, int start,
-                        int limit) override {
+  void ScheduleWithHint(std::function<void()> fn, int start, int limit) override {
     Task t = env_.CreateTask(std::move(fn));
     PerThread* pt = GetPerThread();
     if (pt->pool == this) {
@@ -613,9 +653,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
   static const int kMaxPartitionBits = 16;
   static const int kMaxThreads = 1 << kMaxPartitionBits;
 
-  inline unsigned EncodePartition(unsigned start, unsigned limit) {
-    return (start << kMaxPartitionBits) | limit;
-  }
+  inline unsigned EncodePartition(unsigned start, unsigned limit) { return (start << kMaxPartitionBits) | limit; }
 
   inline void DecodePartition(unsigned val, unsigned* start, unsigned* limit) {
     *limit = val & (kMaxThreads - 1);
@@ -623,7 +661,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     *start = val;
   }
 #ifdef NDEBUG
-  void AssertBounds(int , int ) {}
+  void AssertBounds(int, int) {}
 #else
   void AssertBounds(int start, int end) {
     eigen_plain_assert(start >= 0);
@@ -635,9 +673,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     thread_data_[i].steal_partition.store(val, std::memory_order_relaxed);
   }
 
-  inline unsigned GetStealPartition(int i) {
-    return thread_data_[i].steal_partition.load(std::memory_order_relaxed);
-  }
+  inline unsigned GetStealPartition(int i) { return thread_data_[i].steal_partition.load(std::memory_order_relaxed); }
 
   void ComputeCoprimes(int N, Eigen::MaxSizeVector<unsigned>* coprimes) {
     for (int i = 1; i <= N; i++) {
@@ -684,7 +720,6 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
   std::atomic<bool> cancelled_;
   EventCount ec_;
 
-
   // Main worker thread loop.
   void WorkerLoop(int thread_id) {
     PerThread* pt = GetPerThread();
@@ -697,8 +732,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     // proportional to num_threads_ and we assume that new work is scheduled at
     // a constant rate, so we set spin_count to 5000 / num_threads_. The
     // constant was picked based on a fair dice roll, tune it.
-    const int spin_count =
-        allow_spinning_ && num_threads_ > 0 ? 5000 / num_threads_ : 0;
+    const int spin_count = allow_spinning_ && num_threads_ > 0 ? 5000 / num_threads_ : 0;
     if (num_threads_ == 1) {
       // For num_threads_ == 1 there is no point in going through the expensive
       // steal loop. Moreover, since NonEmptyQueueIndex() calls PopBack() on the
@@ -785,7 +819,8 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     unsigned partition = GetStealPartition(pt->thread_id);
     // If thread steal partition is the same as global partition, there is no
     // need to go through the steal loop twice.
-    if (global_steal_partition_ == partition) return Task();
+    if (global_steal_partition_ == partition)
+      return Task();
     unsigned start, limit;
     DecodePartition(partition, &start, &limit);
     AssertBounds(start, limit);
@@ -794,10 +829,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
   }
 
   // Steals work from any other thread in the pool.
-  Task GlobalSteal() {
-    return Steal(0, num_threads_);
-  }
-
+  Task GlobalSteal() { return Steal(0, num_threads_); }
 
   // WaitForWork blocks until new work is available (returns true), or if it is
   // time to exit (returns false). Can optionally return a task to execute in t
@@ -885,8 +917,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     // Update the internal state
     *state = current * 6364136223846793005ULL + 0xda3e39cb94b95bdbULL;
     // Generate the random output (using the PCG-XSH-RS scheme)
-    return static_cast<unsigned>((current ^ (current >> 22)) >>
-                                 (22 + (current >> 61)));
+    return static_cast<unsigned>((current ^ (current >> 22)) >> (22 + (current >> 61)));
   }
 };
 
@@ -909,7 +940,6 @@ class EigenAllocator {
   virtual void* allocate(size_t num_bytes) const = 0;
   virtual void deallocate(void* buffer) const = 0;
 };
-
 
 // Build a thread pool device on top the an existing pool of threads.
 struct ThreadPoolDevice {
@@ -1125,8 +1155,7 @@ struct ThreadPoolDevice {
 
   // Convenience wrapper for parallelForAsync that does not align blocks.
   void parallelForAsync(Eigen::Index n, const Eigen::TensorOpCost& cost,
-                        std::function<void(Eigen::Index, Eigen::Index)> f,
-                        std::function<void()> done) const {
+                        std::function<void(Eigen::Index, Eigen::Index)> f, std::function<void()> done) const {
     parallelForAsync(n, cost, nullptr, std::move(f), std::move(done));
   }
 
@@ -1155,7 +1184,7 @@ struct ThreadPoolDevice {
   };
 
   struct ParallelForBlock {
-    Eigen::Index size;  // block size
+    Eigen::Index size;   // block size
     Eigen::Index count;  // number of blocks
   };
 
@@ -1168,7 +1197,8 @@ struct ThreadPoolDevice {
                                              std::function<Eigen::Index(Eigen::Index)> block_align) const {
     const double block_size_f = 1.0 / CostModel::taskSize(1, cost);
     const Eigen::Index max_oversharding_factor = 4;
-    Eigen::Index block_size = Eigen::numext::mini(n, Eigen::numext::maxi<Eigen::Index>(Eigen::divup<Eigen::Index>(n, max_oversharding_factor * numThreads()),
+    Eigen::Index block_size = Eigen::numext::mini(
+        n, Eigen::numext::maxi<Eigen::Index>(Eigen::divup<Eigen::Index>(n, max_oversharding_factor * numThreads()),
                                              block_size_f));
     const Eigen::Index max_block_size = Eigen::numext::mini(n, 2 * block_size);
 
@@ -1223,7 +1253,4 @@ struct ThreadPoolDevice {
   EigenAllocator* allocator_;
 };
 
-
-}  // namespace Eigen
-
-
+}  // namespace onnxruntime
