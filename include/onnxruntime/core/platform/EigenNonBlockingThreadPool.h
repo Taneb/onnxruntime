@@ -512,10 +512,10 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
   typedef typename Environment::Task Task;
   typedef RunQueue<Task, 1024> Queue;
 
-  explicit ThreadPoolTempl(int num_threads, Environment env = Environment())
+  explicit ThreadPoolTempl(int num_threads, Environment& env )
       : ThreadPoolTempl(num_threads, true, env) {}
 
-  ThreadPoolTempl(int num_threads, bool allow_spinning, Environment env = Environment())
+  ThreadPoolTempl(int num_threads, bool allow_spinning, Environment& env)
       : env_(env),
         num_threads_(num_threads),
         allow_spinning_(allow_spinning),
@@ -707,7 +707,7 @@ class ThreadPoolTempl : public Eigen::ThreadPoolInterface {
     Queue queue;
   };
 
-  Environment env_;
+  Environment& env_;
   const int num_threads_;
   const bool allow_spinning_;
   Eigen::MaxSizeVector<ThreadData> thread_data_;

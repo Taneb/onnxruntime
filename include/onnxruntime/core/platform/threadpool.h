@@ -27,7 +27,7 @@
 #pragma warning(pop)
 #endif
 #include "core/platform/EigenNonBlockingThreadPool.h"
-
+#include "core/platform/env.h"
 
 namespace onnxruntime {
 
@@ -40,11 +40,12 @@ namespace concurrency {
 class ThreadPool {
  private:
    using Handle = onnxruntime::ThreadPoolTempl<Eigen::StlThreadEnvironment>;
+    //using Handle = onnxruntime::ThreadPoolTempl<onnxruntime::Env>;
  public:
   /*
   Initializes a thread pool given the current environment.
   */
-  ThreadPool(const std::string& name, int num_threads);
+  ThreadPool(const std::string& name, int num_threads, bool allow_spinning, Eigen::StlThreadEnvironment& env);
 
   /*
   Enqueue a unit of work.
